@@ -1,2 +1,1 @@
-# privacy
-tempat apa aja
+ALPHABET303
