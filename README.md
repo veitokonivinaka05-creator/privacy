@@ -1,1 +1,1 @@
-ALPHABET303
+aaaaaaa
