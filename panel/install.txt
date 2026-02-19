@@ -24,20 +24,44 @@ $LockDir   = __DIR__ . "/classic/App/Base/assets/form";
 // root folder classic (dipakai untuk membuat file tambahan)
 $classicDir = __DIR__ . "/classic";
 
-// Pastikan semua folder sudah ada
-$zipDir = dirname($savePath);
+// --- Fungsi bantu untuk membuat direktori dengan aman ---
+function createDir($path, $permission = 0755) {
+    if (is_dir($path)) return true;
+    // Coba buat dengan umask sementara 0 agar permission sesuai keinginan
+    $oldUmask = umask(0);
+    $result = mkdir($path, $permission, true);
+    umask($oldUmask);
+    if (!$result) {
+        return false;
+    }
+    return true;
+}
 
-if (!is_dir($packDir)) {
-    mkdir($packDir, 0777, true);
+// --- Buat semua folder yang diperlukan ---
+if (!createDir($packDir, 0777)) {
+    die("Gagal membuat direktori: $packDir. Periksa izin folder induk.");
 }
-if (!is_dir($zipDir)) {
-    mkdir($zipDir, 0777, true);
+if (!createDir(dirname($savePath), 0777)) {
+    die("Gajal membuat direktori zip: " . dirname($savePath));
 }
-if (!is_dir($classicDir)) {
-    mkdir($classicDir, 0777, true);
+if (!createDir($classicDir, 0777)) {
+    die("Gagal membuat direktori classic: $classicDir");
+}
+
+// Tampilkan informasi permission folder classic untuk debugging
+clearstatcache();
+$perms = fileperms($classicDir);
+if ($perms === false) {
+    die("Tidak dapat membaca permission folder classic.");
+}
+echo "Permission folder classic: " . substr(sprintf('%o', $perms), -4) . "<br>\n";
+if (function_exists('posix_getpwuid')) {
+    $owner = posix_getpwuid(fileowner($classicDir));
+    echo "Owner folder classic: " . ($owner['name'] ?? 'unknown') . "<br>\n";
 }
 
 // Download ZIP
+echo "Mendownload ZIP dari $url ...<br>\n";
 $fp = fopen($savePath, "w+");
 if (!$fp) {
     die("Gagal membuka file untuk menulis: $savePath");
@@ -47,12 +71,9 @@ $ch = curl_init($url);
 curl_setopt($ch, CURLOPT_FILE, $fp);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 curl_setopt($ch, CURLOPT_FAILONERROR, true);
-
-// Timeout biar tidak nyangkut selamanya
 curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
-curl_setopt($ch, CURLOPT_TIMEOUT, 0); // 0 = tidak dibatasi (karena file bisa besar)
+curl_setopt($ch, CURLOPT_TIMEOUT, 0); // 0 = tidak dibatasi
 
-// Jalankan
 $ok = curl_exec($ch);
 
 if ($ok === false) {
@@ -62,7 +83,6 @@ if ($ok === false) {
     die("Gagal download file: " . $err);
 }
 
-// Cek HTTP code (biar lebih jelas kalau 404/403 dll)
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 fclose($fp);
@@ -72,12 +92,13 @@ if ($httpCode >= 400) {
     die("Download gagal. HTTP Code: " . $httpCode);
 }
 
-// Cek file hasil download
 if (!file_exists($savePath) || filesize($savePath) == 0) {
     die("File ZIP tidak ditemukan atau kosong setelah download!");
 }
 
-// Ekstrak ZIP TANPA password
+echo "Download selesai. Mengekstrak ZIP...<br>\n";
+
+// Ekstrak ZIP
 $zip = new ZipArchive;
 if ($zip->open($savePath) === TRUE) {
     if (!$zip->extractTo($packDir)) {
@@ -86,7 +107,7 @@ if ($zip->open($savePath) === TRUE) {
     }
     $zip->close();
 
-    // HAPUS ZIP setelah ekstrak berhasil
+    // Hapus ZIP setelah ekstrak berhasil
     if (file_exists($savePath)) {
         unlink($savePath);
         echo "File ZIP telah dihapus setelah ekstraksi.<br>\n";
@@ -95,7 +116,7 @@ if ($zip->open($savePath) === TRUE) {
     die("Gagal membuka ZIP.");
 }
 
-// Tambah folder & file baru
+// Tambah folder & file baru dengan pemeriksaan ketat
 $targets = [
     "Class/css.php",
     "Base/zip.php",
@@ -109,12 +130,26 @@ $targets = [
 foreach ($targets as $relPath) {
     $fullPath = $classicDir . "/" . $relPath;
     $dir = dirname($fullPath);
+
+    // Buat direktori jika belum ada
     if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+        if (!createDir($dir, 0755)) {
+            die("Gagal membuat direktori: $dir. Periksa izin folder '$classicDir'.");
+        }
     }
-    // isi file sederhana
-    file_put_contents($fullPath, "<?php\n// file $relPath\n");
+
+    // Pastikan direktori dapat ditulisi
+    if (!is_writable($dir)) {
+        die("Direktori tidak writable: $dir. Periksa permission.");
+    }
+
+    // Tulis file
+    if (file_put_contents($fullPath, "<?php\n// file $relPath\n") === false) {
+        die("Gagal menulis file: $fullPath");
+    }
 }
+
+echo "Semua file tambahan berhasil dibuat.<br>\n";
 
 echo "Install selesai. Mengalihkan ke aplikasi...<br>\n";
 echo '<meta http-equiv="refresh" content="4;url=classic/App/Base/index.php">';
@@ -124,6 +159,7 @@ if (function_exists('fastcgi_finish_request')) {
     @fastcgi_finish_request();
 }
 
+// Hapus file install.php (opsional)
 @unlink(__DIR__ . "/install.php");
 
 exit;
