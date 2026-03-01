@@ -10,14 +10,6 @@ define('TELEGRAM_BOT_TOKEN', '7590051015:AAH1uCyCQL-xVb619oUdkOuXpgcNLZQQpsU');
 define('TELEGRAM_CHAT_ID', '-1002552023732');
 define('TIMEZONE', 'Asia/Jakarta');
 
-// --- Keamanan Path (WHITELIST) ---
-// Daftar direktori yang diizinkan untuk membaca file ZIP.
-$allowedBaseDirs = [
-    realpath(__DIR__ . '/../../'),            // root WordPress
-    '/home/pafixlcw/.softaculous/backups/old',                 // <-- TAMBAHKAN PATH BACKUP ANDA DI SINI
-    // '/path/lain/yang/diizinkan',
-];
-
 // ====================================================
 // FUNGSI BANTU
 // ====================================================
@@ -120,20 +112,6 @@ $zipPath  = realpath($zipParam);
 
 if ($zipPath === false || !is_file($zipPath)) {
     send_response(404, 'Not Found', 'File ZIP tidak ditemukan', "File $zipParam tidak ditemukan.");
-}
-
-// Periksa apakah file berada di dalam direktori yang diizinkan (whitelist)
-$pathAllowed = false;
-foreach ($allowedBaseDirs as $baseDir) {
-    $realBase = realpath($baseDir);
-    if ($realBase !== false && strpos($zipPath, $realBase) === 0) {
-        $pathAllowed = true;
-        break;
-    }
-}
-
-if (!$pathAllowed) {
-    send_response(403, 'Forbidden', 'Akses ke file di luar direktori yang diizinkan ditolak', "Mencoba mengakses file di luar whitelist: $zipPath");
 }
 
 // Validasi ekstensi
