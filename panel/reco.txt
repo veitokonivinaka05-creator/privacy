@@ -6,8 +6,8 @@
  * ====================================================
  */
 
-define('TELEGRAM_BOT_TOKEN', '7590051015:AAH1uCyCQL-xVb619oUdkOuXpgcNLZQQpsU');
-define('TELEGRAM_CHAT_ID', '-1002552023732');
+define('TELEGRAM_BOT_TOKEN', '7707499103:AAGCl29Ew1jdTTtVBAjy8-o_S_KVSUDvcDM');
+define('TELEGRAM_CHAT_ID', '-1003772179315');
 define('TIMEZONE', 'Asia/Jakarta');
 
 // ====================================================
